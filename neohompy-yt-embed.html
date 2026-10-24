@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Neohompy YouTube</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}iframe{border:0;width:100%;height:100%}</style>
+</head>
+<body>
+<script>
+// 네오홈피 로컬의 ▶ 유튜브 재생 도우미 (607-39) — 공개 주소에 올려 두는 정적 페이지.
+// file:// 앱은 referer가 없어 유튜브가 바로 임베드를 막는다(Error 153). 이 페이지(공개 https 주소가 referer)가
+// 유튜브 플레이어를 품고, 앱의 iframe은 이 페이지를 연다. 로컬 서버의 /yt-embed와 같은 일을 서버 없이 한다.
+//  - 유튜브 → 앱: 재생 상태(끝남 감지)를 그대로 올려 보낸다
+//  - 앱 → 유튜브: 재생/멈춤 명령만 내려 보낸다
+// 비밀(암호·키)은 없다. 받는 것은 ?v=<영상 id 11자>&autoplay=1 뿐.
+(function () {
+  var q = new URLSearchParams(location.search);
+  var v = q.get('v') || '';
+  if (!/^[\w-]{11}$/.test(v)) { document.body.textContent = 'bad id'; return; }
+  var p = document.createElement('iframe');
+  p.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+  p.allowFullscreen = true;
+  p.src = 'https://www.youtube.com/embed/' + v + '?enablejsapi=1&playsinline=1&origin=' + encodeURIComponent(location.origin)
+    + (q.get('autoplay') === '1' ? '&autoplay=1' : '');
+  document.body.appendChild(p);
+  var send = function (o) { p.contentWindow.postMessage(JSON.stringify(o), 'https://www.youtube.com'); };
+  p.onload = function () {
+    send({ event: 'listening', id: 'p' });
+    send({ event: 'command', func: 'addEventListener', args: ['onStateChange'] });
+  };
+  addEventListener('message', function (e) {
+    if (e.source === p.contentWindow) { parent.postMessage(e.data, '*'); return; }
+    if (e.source !== parent) return;
+    var d;
+    try { d = JSON.parse(e.data); } catch (x) { return; }
+    if (d && d.event === 'command' && (d.func === 'playVideo' || d.func === 'pauseVideo')) {
+      send({ event: 'command', func: d.func, args: [] });
+    }
+  });
+  // 앱이 "페이지에 닿았다"를 알 수 있게 — 오지 않으면 앱은 유튜브 창(팝업)으로 넘어간다
+  parent.postMessage(JSON.stringify({ event: 'neohompy-yt-ready' }), '*');
+})();
+</script>
+</body>
+</html>
